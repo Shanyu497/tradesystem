@@ -15,6 +15,7 @@ Phase 5 雲端部署專用：把 data/processed/ 的最新資料 commit + push �
 from __future__ import annotations
 
 import logging
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -23,11 +24,43 @@ logger = logging.getLogger("git_sync")
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
+# scheduler.py 常常是在「PATH 還沒吃到新裝軟體」的 shell 裡被啟動的（例如剛用
+# winget 裝完 git、還沒重開終端機），所以不能只靠 shutil.which("git") 找不到
+# 就放棄，這裡多一層 Windows 預設安裝路徑的 fallback。
+_GIT_FALLBACK_PATHS = [
+    r"C:\Program Files\Git\cmd\git.exe",
+    r"C:\Program Files (x86)\Git\cmd\git.exe",
+]
 
-def _run_git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args], cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60,
-    )
+
+def _resolve_git() -> str:
+    found = shutil.which("git")
+    if found:
+        return found
+    for candidate in _GIT_FALLBACK_PATHS:
+        if Path(candidate).exists():
+            return candidate
+    return "git"  # 交給 subprocess 嘗試，找不到的話 _run_git 會捕捉例外並記 log
+
+
+def _run_git(*args: str) -> subprocess.CompletedProcess | None:
+    """回傳 None 代表連 git 執行檔都找不到／啟動失敗（不是 git 指令本身失敗）"""
+    try:
+        return subprocess.run(
+            [_resolve_git(), *args], cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60,
+        )
+    except OSError as e:
+        logger.warning(f"無法執行 git（可能沒裝或不在 PATH 上）: {e}")
+        return None
+
+
+def _ok(result: subprocess.CompletedProcess | None, step: str) -> bool:
+    if result is None:
+        return False  # _run_git 已經記過 log 了
+    if result.returncode != 0:
+        logger.warning(f"git {step} 失敗: {result.stderr.strip()}")
+        return False
+    return True
 
 
 def sync_processed_data() -> bool:
@@ -41,29 +74,22 @@ def sync_processed_data() -> bool:
         return False
 
     status = _run_git("status", "--porcelain", "data/processed")
-    if status.returncode != 0:
-        logger.warning(f"git status 失敗，略過資料同步: {status.stderr.strip()}")
+    if not _ok(status, "status"):
         return False
     if not status.stdout.strip():
         logger.info("data/processed 沒有變更，略過同步")
         return False
 
-    add = _run_git("add", "data/processed")
-    if add.returncode != 0:
-        logger.warning(f"git add 失敗: {add.stderr.strip()}")
+    if not _ok(_run_git("add", "data/processed"), "add"):
         return False
 
     message = f"資料更新 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-    commit = _run_git("commit", "-m", message)
-    if commit.returncode != 0:
-        logger.warning(f"git commit 失敗: {commit.stderr.strip()}")
+    if not _ok(_run_git("commit", "-m", message), "commit"):
         return False
 
     push = _run_git("push")
-    if push.returncode != 0:
-        logger.warning(
-            f"git push 失敗（commit 已保留在本機，下次同步時會一起推送）: {push.stderr.strip()}"
-        )
+    if not _ok(push, "push"):
+        logger.warning("commit 已保留在本機，下次同步時會一起推送")
         return False
 
     logger.info("已將最新資料 push 回 git repo，Streamlit Cloud 會自動重新部署")
