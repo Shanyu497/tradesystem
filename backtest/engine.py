@@ -51,17 +51,23 @@ TW_ETF_TAX_PCT = 0.1 / 100
 # 如果你用的券商有收手續費，把這個值改成實際費率（估計成一個比例）。
 US_ROUND_TRIP_PCT = 0.0
 
+# 加密貨幣：Binance 現貨交易手續費，買賣各收一次（未用 BNB 折抵手續費的一般費率），
+# 沒有台股那種交易稅。如果你有開 BNB 折抵或 VIP 費率，實際成本會更低，可自行調整。
+CRYPTO_TAKER_FEE_PCT = 0.1 / 100
+
 
 def _round_trip_cost_pct(market: str, symbol: str) -> float:
     """回傳「買進+賣出」一次完整交易的成本比例（手續費+交易稅）"""
     if market == "US":
         return US_ROUND_TRIP_PCT
+    if market == "CRYPTO":
+        return CRYPTO_TAKER_FEE_PCT * 2
     if market == "TW":
         # 台股 ETF 代號慣例以 0 開頭（0050、00646...），一般個股以其他數字開頭，
         # 用這個慣例判斷該用哪一種交易稅率，不是完美規則但涵蓋目前監控清單的情況。
         tax = TW_ETF_TAX_PCT if symbol.startswith("0") else TW_STOCK_TAX_PCT
         return TW_BROKERAGE_FEE_PCT * 2 + tax
-    raise ValueError(f"未知市場: {market!r}（目前只認得 'TW' 或 'US'）")
+    raise ValueError(f"未知市場: {market!r}（目前只認得 'TW'、'US' 或 'CRYPTO'）")
 
 
 def apply_transaction_costs(trades_df: pd.DataFrame, market: str, symbol: str) -> pd.DataFrame:

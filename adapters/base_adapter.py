@@ -39,7 +39,7 @@ logging.basicConfig(
 PRICE_SCHEMA = [
     "date",      # datetime64
     "symbol",    # str，統一格式如 "2330"（台股）或 "AAPL"（美股），不含後綴
-    "market",    # str，"TW" or "US"
+    "market",    # str，"TW" / "US" / "CRYPTO"
     "open",
     "high",
     "low",

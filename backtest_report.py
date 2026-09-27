@@ -132,7 +132,7 @@ def print_report(rows: list[dict], capital: float, prob_threshold: float) -> Non
     other_rows = [r for r in rows if r["status"] != "正常"]
 
     if normal_rows:
-        print(f"{'市場':<6}{'代號':<8}{'交易數':<8}{'勝率':<8}{'風險報酬比':<12}{'最大回撤':<10}{'累積報酬':<10}{'現在機率':<10}{'AUC':<8}{'建議倉位'}")
+        print(f"{'市場':<8}{'代號':<8}{'交易數':<8}{'勝率':<8}{'風險報酬比':<12}{'最大回撤':<10}{'累積報酬':<10}{'現在機率':<10}{'AUC':<8}{'建議倉位'}")
         print("-" * 100)
         for r in sorted(normal_rows, key=lambda x: -(x["suggested_position_value"])):
             prob_str = f"{r['current_prob']:.1%}" if r["current_prob"] is not None else "-"
@@ -146,7 +146,7 @@ def print_report(rows: list[dict], capital: float, prob_threshold: float) -> Non
             else:
                 position_str = "不建議進場（機率不足）"
 
-            print(f"{r['market']:<6}{r['symbol']:<8}{r['n_trades']:<8}{r['win_rate']:<8.1%}{payoff_str:<12}"
+            print(f"{r['market']:<8}{r['symbol']:<8}{r['n_trades']:<8}{r['win_rate']:<8.1%}{payoff_str:<12}"
                   f"{r['max_drawdown']:<10.1%}{r['total_return']:<10.1%}{prob_str:<10}{auc_str:<8}{position_str}")
 
     if other_rows:

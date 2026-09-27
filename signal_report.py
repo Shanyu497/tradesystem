@@ -98,7 +98,7 @@ def print_report(rows: list[dict], horizon: int, threshold: float) -> None:
     print("\n" + "=" * 88)
     print(f"訊號報告（預測目標：未來 {horizon} 天報酬率 > {threshold:.1%}）")
     print("=" * 88)
-    print(f"{'市場':<6}{'代號':<8}{'訓練樣本':<10}{'上漲機率':<12}{'驗證精準率':<12}{'AUC':<8}{'可信度':<8}{'狀態'}")
+    print(f"{'市場':<8}{'代號':<8}{'訓練樣本':<10}{'上漲機率':<12}{'驗證精準率':<12}{'AUC':<8}{'可信度':<8}{'狀態'}")
     print("-" * 88)
 
     def sort_key(r: dict) -> tuple:
@@ -112,7 +112,7 @@ def print_report(rows: list[dict], horizon: int, threshold: float) -> None:
         precision_str = f"{r['precision']:.1%}" if r["precision"] is not None and not math.isnan(r["precision"]) else "-"
         auc_str = f"{r['auc']:.3f}" if r["auc"] is not None and not math.isnan(r["auc"]) else "-"
         reliability_str = "可信" if r.get("reliable") else "不可信"
-        print(f"{r['market']:<6}{r['symbol']:<8}{r['train_samples']:<10}{prob_str:<12}{precision_str:<12}{auc_str:<8}{reliability_str:<8}{r['status']}")
+        print(f"{r['market']:<8}{r['symbol']:<8}{r['train_samples']:<10}{prob_str:<12}{precision_str:<12}{auc_str:<8}{reliability_str:<8}{r['status']}")
 
     reliable_rows = [r for r in rows if r.get("reliable") and r["probability"] is not None]
     if reliable_rows:

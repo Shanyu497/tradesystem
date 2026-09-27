@@ -1,5 +1,6 @@
 FinMind
 yfinance
+requests
 pandas
 pyarrow
 apscheduler<4

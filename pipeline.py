@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from adapters.base_adapter import StockDataAdapter
+from adapters.crypto_adapter import CryptoAdapter
 from adapters.taiwan_adapter import TaiwanStockAdapter
 from adapters.us_adapter import USStockAdapter
 
@@ -113,6 +114,7 @@ def run_pipeline(start_date: str, end_date: str,
     adapters: dict[str, StockDataAdapter] = {
         "TW": TaiwanStockAdapter(),
         "US": USStockAdapter(),
+        "CRYPTO": CryptoAdapter(),
     }
 
     for market, symbols in watchlist.items():
@@ -143,11 +145,11 @@ def print_summary(results: list[SymbolResult], start_date: str, end_date: str) -
 
     print(f"\n總計 {len(results)} 檔標的，成功 {len(success)} 檔，失敗 {len(failed)} 檔\n")
 
-    print(f"{'市場':<6}{'代號':<8}{'價量筆數':<10}{'基本面筆數':<12}{'籌碼面筆數':<12}{'狀態'}")
+    print(f"{'市場':<8}{'代號':<8}{'價量筆數':<10}{'基本面筆數':<12}{'籌碼面筆數':<12}{'狀態'}")
     print("-" * 60)
     for r in results:
         status = "成功" if r.ok else f"失敗（{'; '.join(r.errors)}）"
-        print(f"{r.market:<6}{r.symbol:<8}{r.price_rows:<10}{r.fundamental_rows:<12}{r.chip_rows:<12}{status}")
+        print(f"{r.market:<8}{r.symbol:<8}{r.price_rows:<10}{r.fundamental_rows:<12}{r.chip_rows:<12}{status}")
 
     if failed:
         print(f"\n有 {len(failed)} 檔標的失敗，建議檢查對應的 API 額度或網路連線。")
@@ -161,7 +163,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--symbols", type=str, default=None,
                          help="只抓指定標的，逗號分隔，例如 2330,AAPL")
     parser.add_argument("--markets", type=str, default=None,
-                         help="只抓指定市場，逗號分隔，例如 TW 或 US 或 TW,US")
+                         help="只抓指定市場，逗號分隔，例如 TW 或 US 或 CRYPTO 或 TW,US")
     return parser.parse_args()
 
 

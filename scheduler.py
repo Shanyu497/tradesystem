@@ -16,6 +16,11 @@ pipeline，抓取當天最新資料；資料更新完之後，緊接著各自再
   （儲存層本來就會用 date+symbol 去重，重複抓不會產生髒資料）。
 - 訊號通知排在資料更新之後至少 30 分鐘觸發，確保 job_taiwan/job_us 已經
   把當天最新資料存好，訊號才會是根據最新資料算出來的。
+- 加密貨幣沒有「收盤」這回事，24/7 都在交易，所以 job_crypto 用固定間隔
+  （預設每 4 小時，用 UTC 時間，跟哪個時區都無關）觸發，而不是套用
+  TW/US 那種「收盤後才抓」的邏輯。但訊號模型本身還是用日線特徵訓練的，
+  一天通知太多次意義不大（訊號不會因為多抓幾次就變準），所以訊號通知
+  還是維持一天一次，抓資料的頻率跟通知的頻率刻意分開。
 - 訊號通知直接重用 signal_report.run_report() / backtest_report.run_backtest_report()
   （跟手動執行 `py signal_report.py` 是同一段程式碼），只是把輸出從印到終端機
   改成組成訊息推播到 LINE，避免邏輯分岔。
@@ -105,6 +110,17 @@ def job_us() -> None:
     sync_processed_data()  # 有設定 git remote（部署雲端）才會真的推送，否則安全略過
 
 
+def job_crypto() -> None:
+    logger.info("=== [排程觸發] 加密貨幣資料更新開始 ===")
+    start_date, end_date = _date_range()
+    try:
+        results = run_pipeline(start_date, end_date, markets={"CRYPTO"})
+        print_summary(results, start_date, end_date)
+    except Exception:
+        logger.exception("加密貨幣排程執行失敗")
+    sync_processed_data()  # 有設定 git remote（部署雲端）才會真的推送，否則安全略過
+
+
 def job_notify(market: str) -> None:
     """
     產出當天訊號報告 + 建議倉位（只看 market 這個市場的標的），組成訊息推播到 LINE。
@@ -151,6 +167,10 @@ def job_notify_us() -> None:
     job_notify("US")
 
 
+def job_notify_crypto() -> None:
+    job_notify("CRYPTO")
+
+
 def main() -> None:
     scheduler = BlockingScheduler()
 
@@ -190,6 +210,28 @@ def main() -> None:
         name="美股每日訊號通知",
     )
 
+    # 加密貨幣 24/7 交易，沒有「收盤後」的概念，用固定 UTC 時間點每 4 小時抓一次，
+    # 讓「今天還在形成中」的日 K 棒盡量新鮮（模型訓練用的還是日線特徵，抓更頻繁
+    # 不會讓訊號更準，純粹是讓最新那根 K 棒的價格更即時）。
+    crypto_trigger = CronTrigger(hour="0,4,8,12,16,20", minute=5, timezone="UTC")
+    scheduler.add_job(
+        job_crypto,
+        trigger=crypto_trigger,
+        id="crypto_4h_update",
+        name="加密貨幣資料更新（每4小時）",
+    )
+
+    # 訊號通知一天一次就好（一天抓好幾次資料，但底層模型是日線特徵，
+    # 通知抓得再頻繁訊號也不會變，一天多通知只會變成騷擾），排在 UTC 00:05
+    # 那次資料更新之後，抓到的是「剛結束的那個 UTC 日」完整 K 棒。
+    crypto_notify_trigger = CronTrigger(hour=0, minute=30, timezone="UTC")
+    scheduler.add_job(
+        job_notify_crypto,
+        trigger=crypto_notify_trigger,
+        id="crypto_daily_notify",
+        name="加密貨幣每日訊號通知",
+    )
+
     logger.info("排程已啟動，等待觸發時間到達（Ctrl+C 結束）...")
     # 直接問 trigger 本身下一次觸發時間，不依賴 job.next_run_time
     # （job.next_run_time 要等 scheduler.start() 真正跑起來才會被賦值，
@@ -199,6 +241,8 @@ def main() -> None:
         ("美股每日資料更新", us_trigger),
         ("台股每日訊號通知", tw_notify_trigger),
         ("美股每日訊號通知", us_notify_trigger),
+        ("加密貨幣資料更新（每4小時）", crypto_trigger),
+        ("加密貨幣每日訊號通知", crypto_notify_trigger),
     ]
     for name, trigger in scheduled:
         next_fire = trigger.get_next_fire_time(None, datetime.now(trigger.timezone))
