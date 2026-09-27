@@ -91,7 +91,7 @@ if not normal_df.empty:
         })[
             ["市場", "代號", "訊號數", "勝率", "風險報酬比", "已採用", "最大回撤", "累積報酬", "現在機率", "AUC", "建議倉位"]
         ],
-        use_container_width=True, hide_index=True,
+        width="stretch", hide_index=True,
     )
     st.caption("訊號數＝勝率/賠率的樣本數；已採用＝扣掉部位重疊限制後真的模擬進場的交易數，最大回撤/累積報酬是用這個算的。")
 

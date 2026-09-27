@@ -75,7 +75,7 @@ for market, symbols in watchlist.items():
             rows.append({"標的": symbol, "資料狀態": "已有資料", "最後更新": mtime.strftime("%Y-%m-%d %H:%M")})
         else:
             rows.append({"標的": symbol, "資料狀態": "尚無資料", "最後更新": "-"})
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(rows, width="stretch", hide_index=True)
 
 st.info(
     "尚無資料的標的，先在終端機執行 `py pipeline.py --days 730` 補齊歷史資料，"

@@ -55,8 +55,8 @@ for window in (20, 50):
     fig.add_trace(go.Scatter(x=plot_df["date"], y=sma_series, name=f"SMA{window}", line=dict(width=1)))
 
 fig.update_layout(xaxis_rangeslider_visible=False, height=600, title=f"{market}/{symbol}")
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 fig_vol = go.Figure(go.Bar(x=plot_df["date"], y=plot_df["volume"], name="成交量"))
 fig_vol.update_layout(height=200, title="成交量")
-st.plotly_chart(fig_vol, use_container_width=True)
+st.plotly_chart(fig_vol, width="stretch")

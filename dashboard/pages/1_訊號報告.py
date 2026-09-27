@@ -71,7 +71,7 @@ st.dataframe(
         "market": "市場", "symbol": "代號", "train_samples": "訓練樣本",
         "probability": "上漲機率", "precision": "驗證精準率", "auc": "AUC", "status": "狀態",
     })[["市場", "代號", "訓練樣本", "上漲機率", "驗證精準率", "AUC", "可信度", "狀態"]],
-    use_container_width=True, hide_index=True,
+    width="stretch", hide_index=True,
 )
 
 insufficient = df[df["train_samples"] < 100]
