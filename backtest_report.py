@@ -9,6 +9,7 @@ Phase 4 主入口：把「機率訊號」轉換成實際的策略績效數字（
     py backtest_report.py --capital 500000 --kelly-fraction 0.25   # 更保守，四分之一凱利
     py backtest_report.py --capital 500000 --prob-threshold 0.6    # 機率門檻拉高，訊號更少但更嚴格
     py backtest_report.py --capital 500000 --symbols 2330,AAPL
+    py backtest_report.py --capital 500000 --horizon 20 --max-concurrent-positions 2  # 長線策略，允許同時持有2筆
 
 這不是財務建議，只是把 Phase 1~3 產出的數字套進公式算出來的參考值——
 凱利公式建議的倉位完全建立在「回測算出的勝率/賠率在未來會持續成立」這個假設上，

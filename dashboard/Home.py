@@ -6,6 +6,13 @@ Phase 5 Dashboard 入口：系統總覽——監控清單有哪些標的、本�
 
 跟 signal_report.py / backtest_report.py 一樣，這裡不重寫任何分析邏輯，
 只讀 data/processed 底下的檔案時間戳記來判斷資料新鮮度。
+
+本機啟動方式：
+    powershell -File run_dashboard.ps1
+不要直接用系統預設的 Python（`streamlit run dashboard/Home.py`）——這台機器預設
+Python 3.14 跟 streamlit 目前的 anyio 版本有已知相容性問題，Dashboard 會直接打不開
+（靜態檔案伺服器丟 TypeError）。run_dashboard.ps1 會自動用獨立的 Python 3.11
+虛擬環境（.venv311/）執行，跟雲端部署用 .python-version 鎖 3.11 是同一個道理。
 """
 
 from __future__ import annotations
