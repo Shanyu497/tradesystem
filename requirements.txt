@@ -1,0 +1,11 @@
+FinMind
+yfinance
+pandas
+pyarrow
+apscheduler<4
+tzdata
+scikit-learn
+streamlit
+plotly
+line-bot-sdk
+python-dotenv

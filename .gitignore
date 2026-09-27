@@ -1,0 +1,18 @@
+# 機密設定
+.env
+.streamlit/secrets.toml
+
+# raw 層只是 API 快取，透過 pipeline.py 重新產生即可，不需要進版控
+data/raw/
+
+# data/processed/ 刻意「不」排除：Streamlit Community Cloud 只能讀 repo 裡的檔案，
+# 沒有你本機的檔案系統，所以雲端 Dashboard 要看到最新資料，
+# 靠的是 scheduler.py 每次抓完資料後把 data/processed/ git commit + push 回這個 repo
+# （見 git_sync.py），Streamlit Cloud 偵測到 push 會自動重新部署。
+
+# Python
+__pycache__/
+*.pyc
+
+# Log
+*.log
