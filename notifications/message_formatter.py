@@ -58,5 +58,5 @@ def format_position_summary(rows: list[dict]) -> str:
             f"｜勝率 {r['win_rate']:.1%} 賠率 {r['payoff_ratio']:.2f}"
         )
 
-    lines.append("\n提醒：以上為歷史回測換算的參考值，不是投資建議。")
+    lines.append("\n提醒：勝率/賠率已扣手續費與交易稅，為歷史回測換算的參考值，不是投資建議。")
     return "\n".join(lines)

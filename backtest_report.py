@@ -13,6 +13,10 @@ Phase 4 主入口：把「機率訊號」轉換成實際的策略績效數字（
 這不是財務建議，只是把 Phase 1~3 產出的數字套進公式算出來的參考值——
 凱利公式建議的倉位完全建立在「回測算出的勝率/賠率在未來會持續成立」這個假設上，
 過去的統計結果不保證未來會重演，實際下單前務必自己再三確認。
+
+勝率/賠率已經扣掉手續費與交易稅（見 backtest/engine.py 的 apply_transaction_costs()），
+不是零成本的理論值；但沒有模擬「最低手續費」這個下限，資金量越小、單筆交易金額越低，
+這裡的估計就會越偏樂觀，小額交易請自行對照你的券商規則。
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from backtest.engine import compute_performance, simulate_strategy, walk_forward_predict
+from backtest.engine import apply_transaction_costs, compute_performance, simulate_strategy, walk_forward_predict
 from pipeline import load_watchlist
 from risk.kelly import kelly_position_size
 from signal_report import load_price_data
@@ -34,6 +38,11 @@ logging.basicConfig(
 logger = logging.getLogger("backtest_report")
 
 MIN_TRAIN_SAMPLES = 100
+
+# 建議倉位金額低於這個門檻時，額外提醒「最低手續費」可能吃掉報酬——
+# apply_transaction_costs() 只算比例式成本，金額越小，最低手續費（很多券商電子下單
+# 仍有 NT$1~20 或等值美元的下限）佔比就越高，比例模型會低估實際成本。
+SMALL_POSITION_WARNING_THRESHOLD = 5000
 
 
 def run_backtest_report(capital: float, horizon: int, threshold: float,
@@ -63,8 +72,11 @@ def run_backtest_report(capital: float, horizon: int, threshold: float,
                 continue
 
             # 1. Walk-forward 樣本外回測，算出勝率/賠率/最大回撤
+            #    apply_transaction_costs() 把手續費/交易稅扣進每筆交易的報酬率，
+            #    讓勝率/賠率反映「真的能落袋」的數字，不是零成本的理論值
             predictions = walk_forward_predict(train_df)
             trades = simulate_strategy(predictions, prob_threshold=prob_threshold)
+            trades = apply_transaction_costs(trades, market, symbol)
             metrics = compute_performance(trades)
 
             if metrics is None:
@@ -142,7 +154,19 @@ def print_report(rows: list[dict], capital: float, prob_threshold: float) -> Non
         for r in other_rows:
             print(f"  {r['market']}/{r['symbol']}: {r['status']}")
 
-    print("\n提醒：以上勝率/賠率來自歷史 Walk-forward 回測，不代表未來一定重演；")
+    small_positions = [
+        r for r in normal_rows
+        if 0 < r["suggested_position_value"] < SMALL_POSITION_WARNING_THRESHOLD
+    ]
+    if small_positions:
+        names = "、".join(f"{r['market']}/{r['symbol']}" for r in small_positions)
+        print(
+            f"\n提醒：{names} 的建議倉位金額偏小（< {SMALL_POSITION_WARNING_THRESHOLD:,.0f}）。"
+            "手續費模型只算比例式成本，沒算最低手續費下限——金額越小，最低手續費"
+            "實際佔比就越高，這裡的勝率/賠率估計會偏樂觀，請自行對照你的券商規則。"
+        )
+
+    print("\n提醒：以上勝率/賠率已扣除手續費與交易稅（比例式），來自歷史 Walk-forward 回測，不代表未來一定重演；")
     print("      「建議倉位」是套用半凱利/你設定的折扣係數與單筆上限後的參考值，不是投資建議。")
 
 

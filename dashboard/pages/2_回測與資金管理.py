@@ -18,10 +18,14 @@ import pandas as pd
 import streamlit as st
 
 from _cache import cached_load_watchlist, cached_run_backtest_report
+from backtest_report import SMALL_POSITION_WARNING_THRESHOLD
 
 st.set_page_config(page_title="回測與資金管理", page_icon="💰", layout="wide")
 st.title("💰 回測與資金管理")
-st.caption("對應 `py backtest_report.py`，同一套 Walk-forward 回測與凱利公式邏輯。")
+st.caption(
+    "對應 `py backtest_report.py`，同一套 Walk-forward 回測與凱利公式邏輯。"
+    "勝率/賠率已扣除手續費與交易稅（比例式，見 backtest/engine.py），不是零成本的理論值。"
+)
 st.warning("這不是財務建議，凱利公式建議的倉位完全建立在「回測算出的勝率/賠率在未來會持續成立」這個假設上。")
 
 watchlist = cached_load_watchlist()
@@ -87,7 +91,20 @@ if not other_df.empty:
     for row in other_df.itertuples():
         st.text(f"{row.market}/{row.symbol}: {row.status}")
 
+if not normal_df.empty:
+    small_positions = normal_df[
+        (normal_df["suggested_position_value"] > 0)
+        & (normal_df["suggested_position_value"] < SMALL_POSITION_WARNING_THRESHOLD)
+    ]
+    if not small_positions.empty:
+        names = "、".join(f"{r.market}/{r.symbol}" for r in small_positions.itertuples())
+        st.info(
+            f"提醒：{names} 的建議倉位金額偏小（< {SMALL_POSITION_WARNING_THRESHOLD:,.0f}）。"
+            "手續費模型只算比例式成本，沒算最低手續費下限——金額越小，最低手續費實際佔比就越高，"
+            "這裡的勝率/賠率估計會偏樂觀，請自行對照你的券商規則。"
+        )
+
 st.caption(
-    "提醒：以上勝率/賠率來自歷史 Walk-forward 回測，不代表未來一定重演；"
+    "提醒：以上勝率/賠率已扣除手續費與交易稅，來自歷史 Walk-forward 回測，不代表未來一定重演；"
     "「建議倉位」是套用凱利折扣係數與單筆上限後的參考值，不是投資建議。"
 )
