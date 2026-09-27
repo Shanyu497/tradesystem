@@ -43,12 +43,14 @@ def cached_run_report(horizon: int, threshold: float, symbols: tuple[str, ...] |
 def cached_run_backtest_report(
     capital: float, horizon: int, threshold: float, prob_threshold: float,
     kelly_fraction: float, max_position_pct: float, symbols: tuple[str, ...] | None,
+    max_concurrent_positions: int = 1,
 ) -> list[dict]:
     symbol_filter = set(symbols) if symbols else None
     return _run_backtest_report(
         capital=capital, horizon=horizon, threshold=threshold,
         prob_threshold=prob_threshold, kelly_fraction=kelly_fraction,
         max_position_pct=max_position_pct, symbol_filter=symbol_filter,
+        max_concurrent_positions=max_concurrent_positions,
     )
 
 

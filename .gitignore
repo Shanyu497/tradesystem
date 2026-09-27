@@ -14,5 +14,9 @@ data/raw/
 __pycache__/
 *.pyc
 
+# 本機專用的 Python 3.11 虛擬環境（streamlit 在 Python 3.14 上有已知的 anyio 相容性問題，
+# 本機跑 Dashboard 改用這個 venv；雲端部署走 .python-version，不受影響）
+.venv311/
+
 # Log
 *.log

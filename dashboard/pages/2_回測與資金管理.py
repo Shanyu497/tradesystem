@@ -24,7 +24,8 @@ st.set_page_config(page_title="回測與資金管理", page_icon="💰", layout=
 st.title("💰 回測與資金管理")
 st.caption(
     "對應 `py backtest_report.py`，同一套 Walk-forward 回測與凱利公式邏輯。"
-    "勝率/賠率已扣除手續費與交易稅（比例式，見 backtest/engine.py），不是零成本的理論值。"
+    "勝率/賠率已扣除手續費與交易稅（比例式，見 backtest/engine.py），不是零成本的理論值；"
+    "最大回撤/累積報酬已考慮「同一檔標的還沒平倉、新訊號就又觸發」的部位重疊限制，不是天真的全額複利假設。"
 )
 st.warning("這不是財務建議，凱利公式建議的倉位完全建立在「回測算出的勝率/賠率在未來會持續成立」這個假設上。")
 
@@ -40,6 +41,10 @@ with col2:
     prob_threshold = st.number_input("進場機率門檻", min_value=0.0, max_value=1.0, value=0.5, step=0.05, format="%.2f")
     kelly_fraction = st.number_input("凱利打折係數（0.5=半凱利）", min_value=0.0, max_value=1.0, value=0.5, step=0.05, format="%.2f")
     max_position_pct = st.number_input("單筆倉位上限（佔總資金）", min_value=0.0, max_value=1.0, value=0.25, step=0.05, format="%.2f")
+    max_concurrent_positions = st.number_input(
+        "同一檔標的同時最多持有幾筆部位", min_value=1, max_value=10, value=1,
+        help="預設 1 最保守：還沒平倉的話，新訊號一律跳過，不會同時開兩倉。horizon 越長，這個設定影響越大。",
+    )
 
 symbol_filter = st.multiselect("只看指定標的（留空 = 全部）", options=all_symbols)
 
@@ -51,6 +56,7 @@ with st.spinner("回測中（第一次或參數變更時需要重新訓練模型
     rows = cached_run_backtest_report(
         capital, horizon, threshold, prob_threshold, kelly_fraction, max_position_pct,
         tuple(symbol_filter) if symbol_filter else None,
+        max_concurrent_positions=max_concurrent_positions,
     )
 
 if not rows:
@@ -80,11 +86,14 @@ if not normal_df.empty:
     normal_df["AUC"] = normal_df["auc"].map(lambda x: f"{x:.3f}" if pd.notna(x) else "-")
 
     st.dataframe(
-        normal_df.rename(columns={"market": "市場", "symbol": "代號", "n_trades": "交易數"})[
-            ["市場", "代號", "交易數", "勝率", "風險報酬比", "最大回撤", "累積報酬", "現在機率", "AUC", "建議倉位"]
+        normal_df.rename(columns={
+            "market": "市場", "symbol": "代號", "n_trades": "訊號數", "n_trades_taken": "已採用",
+        })[
+            ["市場", "代號", "訊號數", "勝率", "風險報酬比", "已採用", "最大回撤", "累積報酬", "現在機率", "AUC", "建議倉位"]
         ],
         use_container_width=True, hide_index=True,
     )
+    st.caption("訊號數＝勝率/賠率的樣本數；已採用＝扣掉部位重疊限制後真的模擬進場的交易數，最大回撤/累積報酬是用這個算的。")
 
 if not other_df.empty:
     st.subheader("無法產出完整回測")
@@ -92,6 +101,13 @@ if not other_df.empty:
         st.text(f"{row.market}/{row.symbol}: {row.status}")
 
 if not normal_df.empty:
+    total_skipped = int(normal_df["n_signals_skipped"].sum())
+    if total_skipped:
+        st.caption(
+            f"另外有 {total_skipped} 次訊號因為當時已經持有部位、額度滿了而被跳過，"
+            "沒有算進最大回撤/累積報酬——調整上面「同時最多持有幾筆部位」可以改變這個行為。"
+        )
+
     small_positions = normal_df[
         (normal_df["suggested_position_value"] > 0)
         & (normal_df["suggested_position_value"] < SMALL_POSITION_WARNING_THRESHOLD)
