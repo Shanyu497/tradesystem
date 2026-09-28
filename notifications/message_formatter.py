@@ -60,3 +60,30 @@ def format_position_summary(rows: list[dict]) -> str:
 
     lines.append("\n提醒：勝率/賠率已扣手續費與交易稅，為歷史回測換算的參考值，不是投資建議。")
     return "\n".join(lines)
+
+
+def format_screener_summary(rows: list[dict], min_probability: float = 0.5, top_n: int = 3) -> str:
+    """
+    對應 crypto_screener.run_screener() 的輸出，摘要「可信且機率夠高」的候選幣。
+    篩選邏輯跟 crypto_screener.select_candidates() 共用同一份，不重複發明一次。
+    """
+    from crypto_screener import select_candidates
+
+    candidates = select_candidates(rows, min_probability)
+
+    lines = [f"【加密貨幣掃描 {date.today().isoformat()}】"]
+
+    if not candidates:
+        lines.append(f"掃描範圍內沒有任何一檔幣同時符合「可信」且「上漲機率 >= {min_probability:.0%}」，今天沒有建議進場的標的。")
+        return "\n".join(lines)
+
+    for r in candidates[:top_n]:
+        lv = r["levels"]
+        lines.append(
+            f"{r['symbol']}：上漲機率 {r['probability']:.1%}（AUC {r['auc']:.3f}）\n"
+            f"　進場 {lv.entry_price:,.4f}｜停損 {lv.stop_loss_price:,.4f}"
+            f"｜停利 {lv.take_profit_price:,.4f}｜風險報酬比 {lv.risk_reward_ratio:.2f}"
+        )
+
+    lines.append("\n提醒：停損=進場價-1.5倍ATR，停利=進場價×(1+threshold)，是換算出來的參考價位，不是精準預測。")
+    return "\n".join(lines)

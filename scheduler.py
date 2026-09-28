@@ -24,6 +24,10 @@ pipeline，抓取當天最新資料；資料更新完之後，緊接著各自再
 - 訊號通知直接重用 signal_report.run_report() / backtest_report.run_backtest_report()
   （跟手動執行 `py signal_report.py` 是同一段程式碼），只是把輸出從印到終端機
   改成組成訊息推播到 LINE，避免邏輯分岔。
+- job_crypto_screener 跟 job_notify_crypto 不一樣：後者只看 watchlist.json 裡固定的
+  BTC/ETH；前者主動掃描 Binance 成交量前幾大的幣種（見 crypto_screener.py），
+  找「還沒被加進 watchlist 的機會」，附上用 ATR/threshold 換算出來的進場/停損/停利價。
+  一樣一天通知一次，不是每次資料更新都掃。
 - 每次資料更新完，會呼叫 git_sync.sync_processed_data() 把 data/processed/ 的
   變更 commit + push 回這個 repo，讓部署在雲端（Streamlit Community Cloud）的
   Dashboard 能讀到最新資料。只有在這個專案有 git remote 時才會真的推送，
@@ -53,10 +57,15 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from backtest_report import run_backtest_report
+from crypto_screener import run_screener as run_crypto_screener
 from git_sync import sync_processed_data
 from notifications.config import get_secret
 from notifications.line_client import send_push_message
-from notifications.message_formatter import format_position_summary, format_signal_summary
+from notifications.message_formatter import (
+    format_position_summary,
+    format_screener_summary,
+    format_signal_summary,
+)
 from pipeline import load_watchlist, print_summary, run_pipeline
 from signal_report import run_report
 
@@ -80,6 +89,10 @@ NOTIFY_THRESHOLD = 0.03
 NOTIFY_PROB_THRESHOLD = 0.5
 NOTIFY_KELLY_FRACTION = 0.5
 NOTIFY_MAX_POSITION_PCT = 0.25
+
+# 加密貨幣掃描用的參數，跟 crypto_screener.py 的 CLI 預設值一致
+SCREENER_TOP_N = 30
+SCREENER_MIN_PROBABILITY = 0.5
 
 
 def _date_range() -> tuple[str, str]:
@@ -171,6 +184,24 @@ def job_notify_crypto() -> None:
     job_notify("CRYPTO")
 
 
+def job_crypto_screener() -> None:
+    """
+    掃描 Binance 成交量前幾大的幣種（不限於 watchlist.json 裡固定的 BTC/ETH），
+    找出可信且機率夠高的短期上漲候選，附上進場/停損/停利價，推播到 LINE。
+    跟 job_notify_crypto 是兩件不同的事：job_notify_crypto 只看 watchlist 裡
+    固定的幾檔；這個 job 主動找「還沒被加進 watchlist 的機會」。
+    """
+    logger.info("=== [排程觸發] 加密貨幣掃描開始 ===")
+    try:
+        rows = run_crypto_screener(
+            top_n=SCREENER_TOP_N, horizon=NOTIFY_HORIZON, threshold=NOTIFY_THRESHOLD,
+        )
+        message = format_screener_summary(rows, min_probability=SCREENER_MIN_PROBABILITY)
+        send_push_message(message)
+    except Exception:
+        logger.exception("加密貨幣掃描執行失敗")
+
+
 def main() -> None:
     scheduler = BlockingScheduler()
 
@@ -232,6 +263,15 @@ def main() -> None:
         name="加密貨幣每日訊號通知",
     )
 
+    # 掃描排在訊號通知之後 10 分鐘，避開同時大量訓練模型搶 CPU
+    crypto_screener_trigger = CronTrigger(hour=0, minute=40, timezone="UTC")
+    scheduler.add_job(
+        job_crypto_screener,
+        trigger=crypto_screener_trigger,
+        id="crypto_daily_screener",
+        name="加密貨幣每日掃描",
+    )
+
     logger.info("排程已啟動，等待觸發時間到達（Ctrl+C 結束）...")
     # 直接問 trigger 本身下一次觸發時間，不依賴 job.next_run_time
     # （job.next_run_time 要等 scheduler.start() 真正跑起來才會被賦值，
@@ -243,6 +283,7 @@ def main() -> None:
         ("美股每日訊號通知", us_notify_trigger),
         ("加密貨幣資料更新（每4小時）", crypto_trigger),
         ("加密貨幣每日訊號通知", crypto_notify_trigger),
+        ("加密貨幣每日掃描", crypto_screener_trigger),
     ]
     for name, trigger in scheduled:
         next_fire = trigger.get_next_fire_time(None, datetime.now(trigger.timezone))

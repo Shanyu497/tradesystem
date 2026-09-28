@@ -25,6 +25,7 @@ crypto_adapter.py
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -46,6 +47,57 @@ KLINES_LIMIT = 1000  # Binance 單次請求最多回傳的 K 棒數
 def _to_binance_symbol(symbol: str) -> str:
     """watchlist 格式「BTC-USD」-> Binance 交易對格式「BTCUSDT」"""
     return symbol.replace("-USD", "USDT")
+
+
+def _from_binance_symbol(binance_symbol: str) -> str:
+    """Binance 交易對格式「BTCUSDT」-> watchlist 格式「BTC-USD」"""
+    return binance_symbol[:-4] + "-USD"  # 固定切掉結尾的 "USDT"
+
+
+# 篩選候選幣種時要排除的雜訊：槓桿代幣（3x/UP/DOWN/BULL/BEAR 這種，波動被人為放大，
+# 技術指標對它們沒有意義）、穩定幣互轉對（USDC/USDT 這種「漲跌」只是脫錨雜訊，不是真訊號）。
+_LEVERAGED_TOKEN_MARKERS = ("UP", "DOWN", "BULL", "BEAR")
+_STABLECOIN_BASES = {"DAI", "EUR", "GBP", "EURI", "FDUSD", "BUSD", "TUSD", "USDP", "PYUSD", "GUSD"}
+
+
+def list_top_symbols(top_n: int = 30) -> list[str]:
+    """
+    回傳 Binance 上「24 小時成交金額」最高的前 top_n 個 USDT 交易對，
+    轉換成 watchlist 格式（「BTC-USD」）。用成交金額排序是業界常見的
+    「篩掉冷門/沒有流動性代幣」做法——流動性太差的幣，技術指標本來就容易失真，
+    價格也可能被少數幾筆掛單就大幅拉動，不適合拿來做技術分析。
+
+    這不是「挑選出會漲的幣」，只是「決定要掃描哪些候選幣」——
+    真正判斷「值不值得進場」的邏輯在 signals/model.py 的可信度判斷那一層。
+    """
+    try:
+        resp = requests.get(f"{BINANCE_BASE_URL}/ticker/24hr", timeout=15)
+        resp.raise_for_status()
+        tickers = resp.json()
+    except Exception:
+        logging.getLogger("CryptoAdapter").exception("Binance 24hr ticker 呼叫失敗，無法取得候選幣清單")
+        return []
+
+    candidates = []
+    for t in tickers:
+        symbol = t.get("symbol", "")
+        if not symbol.endswith("USDT"):
+            continue
+        base = symbol[:-4]
+        if base in _STABLECOIN_BASES or base.startswith("USD"):
+            continue
+        if any(marker in base for marker in _LEVERAGED_TOKEN_MARKERS):
+            continue
+        if base[0].isdigit():  # 例如 1000SHIBUSDT 這種「面額縮放」代幣，避免跟正常幣搞混
+            continue
+        try:
+            quote_volume = float(t.get("quoteVolume", 0))
+        except (TypeError, ValueError):
+            continue
+        candidates.append((symbol, quote_volume))
+
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    return [_from_binance_symbol(sym) for sym, _ in candidates[:top_n]]
 
 
 class CryptoAdapter(StockDataAdapter):

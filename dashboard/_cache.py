@@ -27,6 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import streamlit as st
 
 from backtest_report import run_backtest_report as _run_backtest_report
+from crypto_screener import run_screener as _run_screener
 from pipeline import load_watchlist as _load_watchlist
 from signal_report import run_report as _run_report
 
@@ -54,6 +55,11 @@ def cached_run_backtest_report(
     )
 
 
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner="正在掃描 Binance 候選幣種、訓練模型…（幣數一多會跑比較久）")
+def cached_run_screener(top_n: int, horizon: int, threshold: float, lookback_days: int) -> list[dict]:
+    return _run_screener(top_n=top_n, horizon=horizon, threshold=threshold, lookback_days=lookback_days)
+
+
 @st.cache_data(ttl=CACHE_TTL_SECONDS)
 def cached_load_watchlist() -> dict[str, list[str]]:
     return _load_watchlist()
@@ -62,4 +68,5 @@ def cached_load_watchlist() -> dict[str, list[str]]:
 def clear_all_caches() -> None:
     cached_run_report.clear()
     cached_run_backtest_report.clear()
+    cached_run_screener.clear()
     cached_load_watchlist.clear()
